@@ -1,6 +1,6 @@
-# Mesh Detect Board
+# Deepwoods Device Detection
 
-Mesh Detect Board is a security and monitoring project built around the [XIAO ESP32 C3](https://www.arduino.cc/en/Main/ArduinoBoardXIAO-ESP32C3) and the [Heltec LoRa V3](https://heltec.org/project/wifi-lora-32/). The device is designed to perform an initial baseline scan of nearby Bluetooth (BT/BLE) and WiFi devices for 7 minutes upon boot, whitelisting every device detected. After the baseline period, it continuously scans for new devices and sends an alert over UART to Meshtastic if any non-whitelisted device is detected.
+Deepwoods Device Detection is a security and monitoring project built around the [XIAO ESP32 C3](https://www.arduino.cc/en/Main/ArduinoBoardXIAO-ESP32C3) and the [Heltec LoRa V3](https://heltec.org/project/wifi-lora-32/). The device is designed to perform an initial baseline scan of nearby Bluetooth (BT/BLE) and WiFi devices for 7 minutes upon boot, whitelisting every device detected. After the baseline period, it continuously scans for new devices and sends an alert over UART to Meshtastic if any non-whitelisted device is detected.
 
 ## Overview
 
