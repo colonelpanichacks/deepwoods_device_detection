@@ -330,18 +330,6 @@ void setup() {
     // init NVS
     nvs_flash_init();
 
-    // init UART1
-    uart_config_t uart_cfg = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity    = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-    };
-    uart_driver_install(UART_PORT, UART_BUF_SIZE * 2, 0, 0, nullptr, 0);
-    uart_param_config(UART_PORT, &uart_cfg);
-    uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-
     printQ = xQueueCreate(20, sizeof(PrintMsg));
     probeQ = xQueueCreate(100, sizeof(ProbeEvent));
 
