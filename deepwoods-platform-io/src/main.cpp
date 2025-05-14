@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdio>
 #include <Arduino.h>
+#include <HardwareSerial.h>
 #include <cstdlib>
 #include <cstdarg>
 #include <string>  // for std::string
@@ -26,7 +27,7 @@
 // UART definitions
 #define UART_BUF_SIZE 1024
 #define UART_PORT     UART_NUM_1
-#define UART_TX_PIN   4
+#define UART_TX_PIN   6
 #define UART_RX_PIN   5
 
 // Baseline timing
@@ -84,9 +85,10 @@ static void enqueueFmt(const char* fmt, ...) {
     va_end(ap);
 
     if (strncmp(buf, DETECT_PREFIX, strlen(DETECT_PREFIX)) == 0) {
-        // Non-baseline detections -> UART1 only
-        uart_write_bytes(UART_PORT, buf, strlen(buf));
-        uart_write_bytes(UART_PORT, "\r\n", 2);
+        // Non-baseline detections -> UART1 only via Serial1
+        Serial1.println(buf);
+        // also mirror detections to USB serial
+        Serial.printf("%s\r\n", buf);
     } else {
         // All other logs -> USB serial via Arduino Serial
         Serial.printf("%s\r\n", buf);
@@ -315,6 +317,8 @@ void setup() {
     while (!Serial) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    // Initialize Serial1 for UART1 output on the defined pins
+    Serial1.begin(115200, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
     // give USB time to enumerate
     vTaskDelay(pdMS_TO_TICKS(100));
     // initial USB startup messages
@@ -328,18 +332,6 @@ void setup() {
 
     // init NVS
     nvs_flash_init();
-
-    // init UART1
-    uart_config_t uart_cfg = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity    = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-    };
-    uart_driver_install(UART_PORT, UART_BUF_SIZE * 2, 0, 0, nullptr, 0);
-    uart_param_config(UART_PORT, &uart_cfg);
-    uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
     printQ = xQueueCreate(20, sizeof(PrintMsg));
     probeQ = xQueueCreate(100, sizeof(ProbeEvent));
