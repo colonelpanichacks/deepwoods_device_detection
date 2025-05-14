@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdio>
 #include <Arduino.h>
+#include <HardwareSerial.h>
 #include <cstdlib>
 #include <cstdarg>
 #include <string>  // for std::string
@@ -84,9 +85,8 @@ static void enqueueFmt(const char* fmt, ...) {
     va_end(ap);
 
     if (strncmp(buf, DETECT_PREFIX, strlen(DETECT_PREFIX)) == 0) {
-        // Non-baseline detections -> UART1 only
-        uart_write_bytes(UART_PORT, buf, strlen(buf));
-        uart_write_bytes(UART_PORT, "\r\n", 2);
+        // Non-baseline detections -> UART1 only via Serial1
+        Serial1.println(buf);
         // also mirror detections to USB serial
         Serial.printf("%s\r\n", buf);
     } else {
@@ -317,6 +317,8 @@ void setup() {
     while (!Serial) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    // Initialize Serial1 for UART1 output on the defined pins
+    Serial1.begin(115200, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
     // give USB time to enumerate
     vTaskDelay(pdMS_TO_TICKS(100));
     // initial USB startup messages
