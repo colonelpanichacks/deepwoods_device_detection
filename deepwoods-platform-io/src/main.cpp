@@ -105,7 +105,7 @@ void sendMeshtasticText(char *msg, uint32_t dest, uint8_t channel_index) {
 
 
 // Baseline timing
-static const uint32_t BASELINE_MS = 3000; // 5 minutes
+static const uint32_t BASELINE_MS = 300000; // 5 minutes
 static uint32_t baselineStartMs = 0;
 static volatile bool isBaseline = true;
 
