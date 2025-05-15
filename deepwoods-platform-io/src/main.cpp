@@ -21,7 +21,8 @@
 #include <esp_timer.h>      // for esp_timer_get_time()
 #include <esp_wifi.h>       // for promiscuous sniffing
 #include <Meshtastic.h>
-#define MESH_NODE_DEST    0xffffffff
+
+#define MESH_NODE_DEST    0xFFFFFFFF   // Broadcast all 
 #define MESH_NODE_CHANNEL 0
 
 // UART definitions
