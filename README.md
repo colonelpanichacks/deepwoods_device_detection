@@ -53,11 +53,11 @@ Deepwoods Device Detection is a security and monitoring project built around the
 git clone https://github.com/colonelpanichacks/deepwoods-device-detection.git
 ```
 
-2. **Open the project** in your favorite IDE (e.g., **Arduino IDE** or **PlatformIO**).
+2. **Open the project** in  **PlatformIO**
 
 3. **Compile and flash the firmware** onto the **XIAO ESP32 s3**.
 
-4. **Verify** that the device successfully boots and begins the initial **7-minute scan**.
+4. **Verify** that the device successfully boots and begins the initial **5-minute scan**.
 
 ### **Configuration:**
 
