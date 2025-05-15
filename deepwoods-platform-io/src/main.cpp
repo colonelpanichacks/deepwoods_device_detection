@@ -20,12 +20,84 @@
 #include <WiFi.h>           // Arduino WiFi init
 #include <esp_timer.h>      // for esp_timer_get_time()
 #include <esp_wifi.h>       // for promiscuous sniffing
+#include <Meshtastic.h>
+#define MESH_NODE_DEST    0x87b88752
+#define MESH_NODE_CHANNEL 0
 
 // UART definitions
 #define UART_BUF_SIZE 1024
 #define UART_PORT     UART_NUM_1
-#define UART_RX_PIN   6
-#define UART_TX_PIN   5
+#define UART_TX_PIN   D4
+#define UART_RX_PIN   D5
+#define BAUD_RATE 115200
+
+
+void sendMeshtasticText(char *msg, uint32_t dest, uint8_t channel_index);
+static void enqueueFmt(const char *fmt, ...);
+
+// ------------ Meshtastic Queue & Function ------------
+struct MeshMsg {
+  char buf[512];
+  uint32_t dest;
+  uint8_t channel;
+};
+
+static QueueHandle_t meshQ = nullptr;
+
+static void enqueueMesh(MeshMsg *m) {
+  xQueueSend(meshQ, m, portMAX_DELAY);
+}
+
+// ------------ MeshTask (core 0) ------------
+void MeshTask(void*) {
+  MeshMsg m;
+  char outbuf[512];
+  static char usbBuf[192];
+  const size_t EP = 64;
+  while (xQueueReceive(meshQ, &m, portMAX_DELAY)) {
+    size_t len = strnlen(m.buf, sizeof(m.buf) - 1);
+    memcpy(outbuf, m.buf, len);
+    outbuf[len] = 0;
+
+    sendMeshtasticText(outbuf, m.dest, uint8_t(m.channel));
+  }
+}
+
+// This callback function will be called whenever the radio receives a text message
+void text_message_callback(uint32_t from, uint32_t to,  uint8_t channel, const char* text) {
+  // Do your own thing here. This example just prints the message to the serial console.
+  Serial.print("Received a text message on channel: ");
+  Serial.print(channel);
+  Serial.print(" from: ");
+  Serial.print(from);
+  Serial.print(" to: ");
+  Serial.print(to);
+  Serial.print(" message: ");
+  Serial.println(text);
+  if (to == 0xFFFFFFFF){
+    Serial.println("This is a BROADCAST message.");
+  } else if (to == my_node_num){
+    Serial.println("This is a DM to me!");
+  } else {
+    Serial.println("This is a DM to someone else.");
+  }
+}
+
+// meshtastic send text
+void sendMeshtasticText(char *msg, uint32_t dest, uint8_t channel_index) {
+  // Record the time that this loop began (in milliseconds since the device booted)
+  uint32_t now = millis();
+
+  // Run the Meshtastic loop, and see if it's able to send requests to the device yet
+  bool can_send = mt_loop(now);
+
+  // If we can send, and it's time to do so, send a text message and schedule the next one.
+  if (can_send) {
+    mt_send_text(msg, dest, channel_index);
+    enqueueFmt("sending [%s] to Mesh %x Channel %d", msg, dest, channel_index);
+  }
+}
+
 
 // Baseline timing
 static const uint32_t BASELINE_MS = 300000; // 5 minutes
@@ -82,9 +154,15 @@ static void enqueueFmt(const char* fmt, ...) {
     va_end(ap);
 
     if (strncmp(buf, DETECT_PREFIX, strlen(DETECT_PREFIX)) == 0) {
-        // Mirror to USB first (to avoid blocking in Serial1) then send to UART1
+        // Non-baseline detections -> UART1 only via Serial1
+        MeshMsg m;
+        memcpy(m.buf, buf, strlen(buf)+1);
+        m.dest = MESH_NODE_DEST;
+        m.channel = MESH_NODE_CHANNEL;
+        xQueueSend(meshQ, &m, portMAX_DELAY);
+
+        // also mirror detections to USB serial
         Serial.printf("%s\r\n", buf);
-        Serial1.println(buf);
     } else {
         // All other logs -> USB serial via Arduino Serial
         Serial.printf("%s\r\n", buf);
@@ -314,7 +392,13 @@ void setup() {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     // Initialize Serial1 for UART1 output on the defined pins
-    Serial1.begin(115200, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
+  	// Meshtatic Setup
+  	Serial.println("serial");
+  	mt_serial_init(UART_RX_PIN, UART_TX_PIN, BAUD_RATE);
+  	Serial1.println(" mode");
+
+	set_text_message_callback(text_message_callback);
+
     // give USB time to enumerate
     vTaskDelay(pdMS_TO_TICKS(100));
     // initial USB startup messages
@@ -329,8 +413,12 @@ void setup() {
     // init NVS
     nvs_flash_init();
 
+  	meshQ = xQueueCreate(20, sizeof(MeshMsg));
     printQ = xQueueCreate(20, sizeof(PrintMsg));
     probeQ = xQueueCreate(100, sizeof(ProbeEvent));
+
+	// Start Mesh Alerting Task
+	xTaskCreatePinnedToCore(MeshTask,      "MeshTask",   8192, NULL, 2, NULL, 0);
 
     // start Wi-Fi tasks
     xTaskCreate(ChannelHopTask, "ChHop",   2048, nullptr, 1, nullptr);
