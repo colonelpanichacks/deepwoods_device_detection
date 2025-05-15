@@ -24,8 +24,8 @@
 // UART definitions
 #define UART_BUF_SIZE 1024
 #define UART_PORT     UART_NUM_1
-#define UART_TX_PIN   6
-#define UART_RX_PIN   5
+#define UART_RX_PIN   6
+#define UART_TX_PIN   5
 
 // Baseline timing
 static const uint32_t BASELINE_MS = 300000; // 5 minutes
@@ -82,10 +82,9 @@ static void enqueueFmt(const char* fmt, ...) {
     va_end(ap);
 
     if (strncmp(buf, DETECT_PREFIX, strlen(DETECT_PREFIX)) == 0) {
-        // Non-baseline detections -> UART1 only via Serial1
-        Serial1.println(buf);
-        // also mirror detections to USB serial
+        // Mirror to USB first (to avoid blocking in Serial1) then send to UART1
         Serial.printf("%s\r\n", buf);
+        Serial1.println(buf);
     } else {
         // All other logs -> USB serial via Arduino Serial
         Serial.printf("%s\r\n", buf);
