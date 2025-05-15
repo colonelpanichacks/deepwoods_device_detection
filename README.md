@@ -39,7 +39,7 @@ Deepwoods Device Detection is a security and monitoring project built around the
 ## 💻 **Software**
 
 - **Firmware:** The firmware is written in **C/C++** for the ESP32 environment.
-- **UART Communication:** Configured for sending alert messages to the Meshtastic device.
+- **UART Communication:** Configured for sending alert messages to the Meshtastic device. Please Note, you must select proto mode instead of text message mode in Meshtastic's serial settings. 
 - **Wireless Libraries:** Utilizes libraries for **Bluetooth**, **BLE**, and **WiFi** scanning.
 
 ---
