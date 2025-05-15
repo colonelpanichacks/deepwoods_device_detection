@@ -6,11 +6,9 @@
 #include <cstdlib>
 #include <cstdarg>
 #include <string>  // for std::string
-
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
-
 #include <driver/uart.h>
 #include <esp_log.h>
 #include <nvs_flash.h>
@@ -18,14 +16,11 @@
 #include <esp_wifi.h>
 #include <soc/rtc_cntl_reg.h>
 #include <soc/soc.h>
-
 #include "NimBLEDevice.h"
 #include <WiFi.h>           // Arduino WiFi init
 #include <esp_timer.h>      // for esp_timer_get_time()
 #include <esp_wifi.h>       // for promiscuous sniffing
-
 #include <Meshtastic.h>
-
 #define MESH_NODE_DEST    0x87b88752
 #define MESH_NODE_CHANNEL 0
 
