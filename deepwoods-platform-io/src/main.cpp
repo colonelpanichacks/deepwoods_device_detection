@@ -33,7 +33,6 @@
 #define BAUD_RATE 115200
 
 
-void sendMeshtasticText(char *msg, uint32_t dest, uint8_t channel_index);
 static void enqueueFmt(const char *fmt, ...);
 
 // ------------ Meshtastic Queue & Function ------------
@@ -45,22 +44,54 @@ struct MeshMsg {
 
 static QueueHandle_t meshQ = nullptr;
 
-static void enqueueMesh(MeshMsg *m) {
-  xQueueSend(meshQ, m, portMAX_DELAY);
+// Node report callback: only used to complete the serial API handshake so the
+// radio treats us as a connected client (also fills in my_node_num).
+static void nodeReportCallback(mt_node_t*, mt_nr_progress_t progress) {
+  if (progress == MT_NR_DONE) {
+    Serial.printf("Meshtastic radio connected, node 0x%08x\r\n", (unsigned)my_node_num);
+  }
 }
 
-// ------------ MeshTask (core 0) ------------
+// ------------ MeshTask (core 0) ------------
+// Pumps the Meshtastic client continuously: drains the radio's PROTO stream,
+// sends the keepalive heartbeat, and sends queued alerts. Previously mt_loop()
+// only ran when an alert fired, so the radio's output piled up unread and no
+// heartbeat went out between alerts. An alert that fails to send is retried.
 void MeshTask(void*) {
   MeshMsg m;
-  char outbuf[512];
-  static char usbBuf[192];
-  const size_t EP = 64;
-  while (xQueueReceive(meshQ, &m, portMAX_DELAY)) {
-    size_t len = strnlen(m.buf, sizeof(m.buf) - 1);
-    memcpy(outbuf, m.buf, len);
-    outbuf[len] = 0;
+  bool pending = false;
+  uint32_t nextTryMs = 0;
+  bool handshakeSent = false;
+  const uint32_t HANDSHAKE_DELAY_MS = 3000;  // let the radio finish booting
+  const uint32_t RETRY_MS = 2000;
 
-    sendMeshtasticText(outbuf, m.dest, uint8_t(m.channel));
+  while (true) {
+    uint32_t now = millis();
+    bool ready = mt_loop(now);
+
+    if (ready && !handshakeSent && now >= HANDSHAKE_DELAY_MS) {
+      mt_request_node_report(nodeReportCallback);
+      handshakeSent = true;
+    }
+
+    if (!pending && xQueueReceive(meshQ, &m, 0) == pdTRUE) {
+      m.buf[sizeof(m.buf) - 1] = 0;
+      pending = true;
+      nextTryMs = now;
+    }
+
+    if (pending && ready && now >= nextTryMs) {
+      if (mt_send_text(m.buf, m.dest, m.channel)) {
+        Serial.printf("sent [%s] to mesh %08x channel %u\r\n",
+                      m.buf, (unsigned)m.dest, (unsigned)m.channel);
+        pending = false;
+      } else {
+        Serial.printf("mesh send failed, retrying: %s\r\n", m.buf);
+        nextTryMs = now + RETRY_MS;
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
@@ -83,22 +114,6 @@ void text_message_callback(uint32_t from, uint32_t to,  uint8_t channel, const c
     Serial.println("This is a DM to someone else.");
   }
 }
-
-// meshtastic send text
-void sendMeshtasticText(char *msg, uint32_t dest, uint8_t channel_index) {
-  // Record the time that this loop began (in milliseconds since the device booted)
-  uint32_t now = millis();
-
-  // Run the Meshtastic loop, and see if it's able to send requests to the device yet
-  bool can_send = mt_loop(now);
-
-  // If we can send, and it's time to do so, send a text message and schedule the next one.
-  if (can_send) {
-    mt_send_text(msg, dest, channel_index);
-    enqueueFmt("sending [%s] to Mesh %x Channel %d", msg, dest, channel_index);
-  }
-}
-
 
 // Baseline timing
 static const uint32_t BASELINE_MS = 300000; // 5 minutes
@@ -398,7 +413,6 @@ void setup() {
   	// Meshtatic Setup
   	Serial.println("serial");
   	mt_serial_init(UART_RX_PIN, UART_TX_PIN, BAUD_RATE);
-  	Serial1.println(" mode");
 
 	set_text_message_callback(text_message_callback);
 
