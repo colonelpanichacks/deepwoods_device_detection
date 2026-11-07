@@ -389,7 +389,9 @@ void setup() {
     // disable brown-out detector
     REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ENA);
     Serial.begin(115200);
-    while (!Serial) {
+    // Wait briefly for a USB host, but never block: in the field the board runs
+    // off battery with no host attached, and an unbounded wait would hang boot.
+    for (uint32_t t0 = millis(); !Serial && millis() - t0 < 2000; ) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     // Initialize Serial1 for UART1 output on the defined pins
