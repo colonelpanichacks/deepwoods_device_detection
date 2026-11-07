@@ -88,7 +88,13 @@ To use protobuf with your Deepwoods Device Detection system:
 
 ## Setup & Installation
 
-### Firmware Installation:
+### Web Flasher (easiest)
+
+Flash the XIAO ESP32-S3 straight from your browser (Chrome, Edge or Opera on desktop), no toolchain needed:
+
+**[colonelpanichacks.github.io/deepwoods_device_detection/flasher](https://colonelpanichacks.github.io/deepwoods_device_detection/flasher/)**
+
+### Firmware Installation (PlatformIO):
 
 1. **Clone this repository:**
 ```bash

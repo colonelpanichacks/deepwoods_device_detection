@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deepwoods // Web Flasher</title>
+<meta name="description" content="Deepwoods Device Detection firmware installer for XIAO ESP32-S3. Baselines nearby BLE + WiFi, then alerts over Meshtastic when something new shows up.">
+<style>
+  :root {
+    --bg:        #030805;
+    --bg-grid:   #0a2015;
+    --panel:     rgba(6, 14, 10, 0.82);
+    --cyan:      #00e5ff;
+    --cyan-dim:  #0a5566;
+    --magenta:   #ff2bd6;
+    --green:     #00ff66;
+    --green-dim: #0a3a20;
+    --lime:      #a8ff3e;
+    --text:      #cfe8d8;
+    --muted:     #6a8878;
+    --white:     #ffffff;
+
+    --amber:     #ffb000;
+    --amber-bg:  #0a0600;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+    text-align: center;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(0,255,102,0.04), transparent 60%),
+      linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0 / 44px 44px,
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0 / 44px 44px,
+      var(--bg);
+    padding: 0 16px 48px;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  a { color: var(--green); text-decoration: none; border-bottom: 1px dotted rgba(0,255,102,0.4); }
+  a:hover { color: var(--white); border-bottom-color: var(--white); }
+  b { color: var(--white); font-weight: normal; }
+
+  /* --- TERMINAL HEADER --- */
+  .terminal {
+    background: var(--amber-bg);
+    color: var(--amber);
+    padding: 28px 16px 22px;
+    margin: 0 -16px 32px;
+    border-bottom: 1px solid var(--amber);
+    text-shadow: 0 0 4px rgba(255,176,0,0.4);
+    position: relative;
+    overflow: hidden;
+  }
+  .terminal::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at center, rgba(255,176,0,0.06), transparent 60%),
+      repeating-linear-gradient(0deg,
+        transparent 0 2px,
+        rgba(0,0,0,0.4) 3px 3px);
+    pointer-events: none;
+  }
+  .banner {
+    color: #00e7ff;
+    text-shadow: 0 0 8px #00e7ff;
+    font-size: 10px;
+    line-height: 1.05;
+    white-space: pre;
+    margin: 0 auto;
+    display: inline-block;
+    text-align: left;
+    position: relative;
+  }
+  .subtitle {
+    color: #fff4d0;
+    letter-spacing: 5px;
+    font-size: 12px;
+    margin: 12px 0 0;
+    text-shadow: 0 0 6px rgba(255,176,0,0.6);
+    position: relative;
+  }
+  .subtitle .accent {
+    color: var(--magenta);
+    text-shadow: 0 0 8px var(--magenta);
+  }
+  .subtitle .sep { color: var(--amber); margin: 0 10px; opacity: 0.6; }
+
+  /* --- CYBER SECTIONS --- */
+  .panel {
+    border: 1px solid rgba(0,255,102,0.22);
+    background: var(--panel);
+    margin: 24px auto;
+    max-width: 720px;
+  }
+  .panel > header {
+    padding: 10px 20px;
+    background: rgba(0,255,102,0.06);
+    border-bottom: 1px solid rgba(0,255,102,0.22);
+    color: var(--green);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel > header .right { color: var(--muted); font-size: 10px; letter-spacing: 2px; }
+  .panel > .body { padding: 24px 22px; }
+
+  /* Node-mode gets a magenta-tinted header so it visually reads as its own group */
+  .panel.node-mode { border-color: rgba(255,43,214,0.30); }
+  .panel.node-mode > header {
+    background: rgba(255,43,214,0.06);
+    border-bottom-color: rgba(255,43,214,0.30);
+    color: var(--magenta);
+  }
+
+  /* --- STEPS --- */
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 0;
+    border-bottom: 1px dashed rgba(0,255,102,0.12);
+  }
+  .step:last-child { border-bottom: none; }
+  .step .n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-size: 18px;
+    font-weight: 700;
+    background: rgba(0,255,102,0.04);
+    border-radius: 50%;
+  }
+  .step h3 {
+    margin: 4px 0 0;
+    color: var(--white);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .step p {
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    max-width: 520px;
+  }
+
+  /* --- FLASH BUTTONS --- */
+  esp-web-install-button { display: inline-block; margin-top: 10px; }
+  esp-web-install-button::part(button) {
+    background: #050f08;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 12px 26px;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  esp-web-install-button::part(button):hover {
+    background: var(--green);
+    color: #050f08;
+  }
+  esp-web-install-button.magenta::part(button) {
+    color: var(--magenta);
+    border-color: var(--magenta);
+  }
+  esp-web-install-button.magenta::part(button):hover {
+    background: var(--magenta);
+    color: #050f08;
+  }
+  .unsupported, .not-allowed {
+    color: var(--magenta);
+    padding: 10px 14px;
+    border: 1px dashed var(--magenta);
+    display: inline-block;
+    font-size: 13px;
+    max-width: 520px;
+  }
+
+  /* --- ROLE PICKER (Node Mode sub-select) --- */
+  .role-pick {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin: 8px 0 14px;
+    justify-content: center;
+  }
+  .role-pick label {
+    flex: 1 1 260px;
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 14px;
+    border: 1px solid rgba(255,43,214,0.28);
+    background: rgba(255,43,214,0.03);
+    cursor: pointer;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .role-pick label:hover { border-color: var(--magenta); }
+  .role-pick label.on { border-color: var(--magenta); background: rgba(255,43,214,0.07); }
+  .role-pick input[type=radio] { margin: 3px 0 0 0; accent-color: var(--magenta); flex-shrink: 0; }
+  .role-pick .role-name {
+    color: var(--magenta); font-weight: 500; letter-spacing: 2px;
+    text-transform: uppercase; font-size: 12px;
+  }
+  .role-pick .role-desc { color: var(--muted); font-size: 12px; }
+
+  /* --- MODE / VARIANT BLOCKS --- */
+  .mode {
+    padding: 22px 0;
+    border-bottom: 1px dashed rgba(0,255,102,0.12);
+  }
+  .mode:last-child { border-bottom: none; }
+  .mode .tag {
+    display: inline-block;
+    color: var(--green);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 2px 12px;
+    border: 1px solid var(--green);
+    background: rgba(0,255,102,0.04);
+    margin-bottom: 10px;
+  }
+  .mode.node-tag .tag {
+    color: var(--magenta);
+    border-color: var(--magenta);
+    background: rgba(255,43,214,0.04);
+  }
+  .mode h3 {
+    margin: 6px 0 4px;
+    color: var(--white);
+    font-size: 16px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .mode p {
+    margin: 0 auto 12px;
+    max-width: 560px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .specs {
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    gap: 4px 18px;
+    text-align: left;
+    padding: 10px 16px;
+    background: rgba(0,255,102,0.03);
+    border: 1px solid rgba(0,255,102,0.18);
+    font-size: 13px;
+    margin: 4px auto 12px;
+  }
+  .mode.node-tag .specs {
+    background: rgba(255,43,214,0.03);
+    border-color: rgba(255,43,214,0.20);
+  }
+  .specs dt {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 11px;
+    align-self: center;
+  }
+  .specs dd { margin: 0; color: var(--green); }
+  .mode.node-tag .specs dd { color: var(--magenta); }
+  .specs dd.val { color: var(--text); }
+
+  .kbd {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--green);
+    color: var(--white);
+    background: rgba(0,255,102,0.05);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  /* --- ASCII architecture diagram --- */
+  .arch {
+    display: block;
+    margin: 8px auto 18px;
+    padding: 14px 16px;
+    background: rgba(255,43,214,0.03);
+    border: 1px dashed rgba(255,43,214,0.25);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre;
+    text-align: left;
+    overflow-x: auto;
+    max-width: 640px;
+  }
+  .arch .r { color: var(--magenta); }
+  .arch .h { color: var(--cyan); }
+
+  /* --- TROUBLE --- */
+  .trouble .n {
+    border-color: var(--magenta);
+    color: var(--magenta);
+    background: rgba(255,43,214,0.05);
+  }
+
+  footer {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 3px;
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px dashed rgba(0,255,102,0.12);
+  }
+
+  @media (max-width: 520px) {
+    .banner { font-size: 7px; }
+    .subtitle { letter-spacing: 3px; font-size: 11px; }
+    .arch { font-size: 9px; }
+  }
+
+  /* --- DEEPWOODS ADDITIONS --- */
+  esp-web-install-button button[slot=activate] {
+    background: #050f08;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 12px 26px;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(0,255,102,0.25);
+    text-shadow: 0 0 6px rgba(0,255,102,0.6);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  esp-web-install-button button[slot=activate]:hover {
+    background: var(--green); color: #050f08; text-shadow: none;
+  }
+  .hero-img {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto 18px;
+    border: 1px solid rgba(0,255,102,0.22);
+    box-shadow: 0 0 24px rgba(0,229,255,0.10);
+  }
+  .lead {
+    max-width: 620px; margin: 0 auto 14px;
+    color: var(--text); font-size: 14px; text-align: left;
+  }
+  .lead + .lead { margin-top: -4px; }
+  .phases {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 18px auto 8px;
+    max-width: 660px;
+    text-align: left;
+  }
+  .phase {
+    border: 1px solid rgba(0,255,102,0.22);
+    background: rgba(0,255,102,0.03);
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .phase .ph {
+    display: block;
+    color: var(--green);
+    letter-spacing: 2px;
+    font-size: 11px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    text-shadow: 0 0 6px rgba(0,255,102,0.5);
+  }
+  .phase.cyan { border-color: rgba(0,229,255,0.30); background: rgba(0,229,255,0.03); }
+  .phase.cyan .ph { color: var(--cyan); text-shadow: 0 0 6px rgba(0,229,255,0.5); }
+  .phase.pink { border-color: rgba(255,43,214,0.30); background: rgba(255,43,214,0.03); }
+  .phase.pink .ph { color: var(--magenta); text-shadow: 0 0 6px rgba(255,43,214,0.5); }
+  .phase h4 { margin: 0 0 4px; color: var(--white); font-weight: 500; font-size: 14px; letter-spacing: 1px; }
+  .phase p { margin: 0; color: var(--muted); }
+  .console {
+    display: block;
+    margin: 8px auto 14px;
+    padding: 14px 16px;
+    background: #020503;
+    border: 1px solid rgba(0,255,102,0.22);
+    color: var(--green);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre;
+    text-align: left;
+    overflow-x: auto;
+    max-width: 640px;
+  }
+  .console .a { color: var(--magenta); text-shadow: 0 0 6px rgba(255,43,214,0.5); }
+  .console .m { color: var(--muted); }
+  .warn {
+    max-width: 620px;
+    margin: 14px auto 0;
+    padding: 12px 16px;
+    border: 1px solid var(--amber);
+    background: rgba(255,176,0,0.05);
+    color: #ffe2a0;
+    font-size: 13px;
+    text-align: left;
+  }
+  .warn b { color: var(--amber); }
+  .arch .g { color: var(--green); }
+  .arch { max-width: 420px; }
+  @media (max-width: 620px) {
+    .phases { grid-template-columns: 1fr; }
+    .console { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="terminal">
+  <pre class="banner"> ____                                                   _
+|  _ \   ___   ___  _ __  __      __   ___    ___    __| | ___
+| | | | / _ \ / _ \| '_ \ \ \ /\ / /  / _ \  / _ \  / _` |/ __|
+| |_| ||  __/|  __/| |_) | \ V  V /  | (_) || (_) || (_| |\__ \
+|____/  \___| \___|| .__/   \_/\_/    \___/  \___/  \__,_||___/
+                   |_|</pre>
+  <div class="subtitle">DEEPWOODS<span class="sep">//</span>WEB FLASHER<span class="sep">//</span>XIAO ESP32<span class="accent">&ndash;</span>S3</div>
+</header>
+
+<main>
+
+<!-- =============================================================
+     WHAT IS DEEPWOODS
+     ============================================================= -->
+<section class="panel">
+  <header><span>What is Deepwoods</span><span class="right">device detection</span></header>
+  <div class="body">
+
+    <img class="hero-img" src="deepwoods.jpg" alt="Deepwoods ASCII landscape: a mountain lake at night" width="900" height="687">
+
+    <p class="lead">
+      <b>Deepwoods Device Detection</b> is a tripwire for radios. Drop it at a campsite, a cabin, a trailhead or a back room, power it up and walk away. It spends its first <b>5 minutes</b> learning every Bluetooth and WiFi device that is already around, treats all of them as &ldquo;normal&rdquo;, and from then on stays quiet unless something <b>new</b> shows up.
+    </p>
+    <p class="lead">
+      When a phone, tracker, laptop, access point or anything else with a radio appears that was not there during the baseline, Deepwoods sends an alert out over a <b>Meshtastic</b> LoRa mesh, so you hear about it on your handheld or phone kilometers away, with no cell service and no internet.
+    </p>
+
+    <div class="phases">
+      <div class="phase">
+        <span class="ph">Phase 1 &middot; 0&ndash;5 min</span>
+        <h4>Baseline</h4>
+        <p>Scans BLE + WiFi and records every MAC it sees. Everything heard here is whitelisted.</p>
+      </div>
+      <div class="phase cyan">
+        <span class="ph">Phase 2 &middot; forever</span>
+        <h4>Watch</h4>
+        <p>Keeps scanning nonstop. Devices from the baseline are ignored.</p>
+      </div>
+      <div class="phase pink">
+        <span class="ph">Phase 3 &middot; on new MAC</span>
+        <h4>Alert</h4>
+        <p>A device that is not in the baseline triggers one alert over the mesh. Each new device alerts once.</p>
+      </div>
+    </div>
+
+    <dl class="specs">
+      <dt>BLE</dt><dd class="val">Active scan of advertisements (NimBLE)</dd>
+      <dt>WiFi APs</dt><dd class="val">Active scan, access point BSSIDs</dd>
+      <dt>WiFi Clients</dt><dd class="val">Probe requests, promiscuous, ch 1&ndash;13 hop</dd>
+      <dt>Capacity</dt><dd class="val">200 BLE / 200 AP / 500 probe MACs per boot</dd>
+      <dt>Alerts</dt><dd class="val">Meshtastic text, broadcast on channel 0</dd>
+      <dt>Network</dt><dd class="val">None. No WiFi join, no cloud, no app</dd>
+    </dl>
+
+    <pre class="arch"><span class="g">┌──────────────────────────────────┐
+│ XIAO ESP32-S3   (Deepwoods)      │
+│ BLE + WiFi scan, baseline, diff  │
+│ D4 (GPIO5) TX  -&gt;  Heltec RX 19  │
+│ D5 (GPIO6) RX  &lt;-  Heltec TX 20  │
+└──────────────────────────────────┘</span>
+                  │  UART 115200
+<span class="r">┌──────────────────────────────────┐
+│ Heltec LoRa V3                   │
+│ Meshtastic, serial PROTO mode    │
+└──────────────────────────────────┘</span>
+                  │
+        LoRa mesh (multi-hop OK)
+                  │
+<span class="h">┌──────────────────────────────────┐
+│ Your Meshtastic radio / phone    │
+│ "Detected non-baseline BLE: ..." │
+└──────────────────────────────────┘</span></pre>
+
+    <p class="lead">
+      Built for the <a href="https://colonelpanic.tech">Mesh Detect board</a>, which carries the XIAO and the Heltec together and already has the UART wired. Any XIAO ESP32-S3 + Heltec V3 pair works if you wire it yourself.
+    </p>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     INSTALL
+     ============================================================= -->
+<section class="panel">
+  <header><span>Install</span><span class="right">3 steps</span></header>
+  <div class="body">
+
+    <div class="step">
+      <div class="n">1</div>
+      <h3>Plug the XIAO in</h3>
+      <p>Use a real USB-C <b>data</b> cable. Charge-only cables won't show up as a serial port. If it's your first flash, hold the <span class="kbd">BOOT</span> button while plugging in.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">2</div>
+      <h3>Hit Flash below</h3>
+      <p>Chrome, Edge, or Opera on desktop. Your browser shows a list of serial ports: pick the XIAO. The install takes about 30 seconds.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">3</div>
+      <h3>Set the Heltec to PROTO mode</h3>
+      <p>Deepwoods talks to Meshtastic over the protobuf API, <b>not</b> text-message mode. Configure the Heltec's serial module as shown in the Meshtastic panel below.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     FLASH
+     ============================================================= -->
+<section class="panel">
+  <header><span>Flash Firmware</span><span class="right">1 build &middot; xiao esp32-s3</span></header>
+  <div class="body">
+
+    <div class="mode">
+      <span class="tag">[ DEEPWOODS ]</span>
+      <h3>Deepwoods Device Detection</h3>
+      <p>The full firmware: 5-minute baseline, continuous BLE + WiFi + probe-request watch, and Meshtastic alerts over UART. Every alert is also mirrored to USB serial at 115200 so you can watch it live on a laptop.</p>
+      <dl class="specs">
+        <dt>Target</dt><dd class="val">Seeed XIAO ESP32-S3</dd>
+        <dt>Baseline</dt><dd class="val">5 minutes from boot</dd>
+        <dt>UART Out</dt><dd class="val">D4 (GPIO5) TX / D5 (GPIO6) RX @ 115200</dd>
+        <dt>Mesh</dt><dd class="val">Heltec V3, Meshtastic serial PROTO</dd>
+      </dl>
+      <esp-web-install-button id="flashDeepwoods" manifest="./manifest.json">
+        <button slot="activate">&gt;&gt; CONNECT &amp; FLASH DEEPWOODS &lt;&lt;</button>
+        <span slot="unsupported" class="unsupported">Your browser doesn't support Web Serial. Open this page in Chrome, Edge, or Opera on a desktop.</span>
+        <span slot="not-allowed" class="not-allowed">This page must be served over HTTPS. GitHub Pages handles that automatically.</span>
+      </esp-web-install-button>
+    </div>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     MESHTASTIC SETUP
+     ============================================================= -->
+<section class="panel node-mode">
+  <header><span>Meshtastic Setup</span><span class="right">heltec lora v3</span></header>
+  <div class="body">
+
+    <p class="lead">In the Meshtastic app, connect to the Heltec and open <b>Settings &rsaquo; Module Configuration &rsaquo; Serial</b>:</p>
+
+    <div class="mode node-tag" style="padding-top: 4px;">
+      <dl class="specs">
+        <dt>Enabled</dt><dd>true</dd>
+        <dt>Mode</dt><dd>PROTO</dd>
+        <dt>Receive (RX)</dt><dd>GPIO 19</dd>
+        <dt>Transmit (TX)</dt><dd>GPIO 20</dd>
+        <dt>Baud</dt><dd>115200</dd>
+      </dl>
+    </div>
+
+    <p class="lead">Alerts arrive as normal text messages on the mesh, broadcast on the Heltec's <b>primary channel (index 0)</b>. Any radio or phone on that channel sees them.</p>
+
+    <div class="warn">
+      <b>Use a private primary channel.</b> Alerts contain the MAC addresses of devices near your node. If the Heltec's primary channel is the default public LongFast, those alerts go out to every stranger on the public mesh. Give the Heltec and your receiving radio a shared private channel with its own random key before deploying.
+    </div>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     WHAT YOU'LL SEE
+     ============================================================= -->
+<section class="panel">
+  <header><span>What You'll See</span><span class="right">usb serial &middot; 115200</span></header>
+  <div class="body">
+
+    <p class="lead">Open a serial monitor on the XIAO's USB port at 115200 to watch it work. A baseline progress line prints every 15 seconds, then alerts once the baseline ends:</p>
+
+<pre class="console">Deepwoods Device Detection
+5 minute Baseline Scan Started
+Baseline progress: 14 BLE, 6 WiFi, 3 ProbeReq
+Baseline Scan has 4 minutes remaining.
+<span class="m">...</span>
+Baseline complete: 41 BLE, 9 WiFi, 12 ProbeReq
+=== Baseline complete ===
+<span class="a">Detected non-baseline BLE: 5c:3a:91:0e:22:7b</span>
+<span class="a">Detected non-baseline ProbeReq: A4:83:E7:10:9F:02</span>
+<span class="a">Detected non-baseline WiFi: 9E:1B:44:C0:5D:61</span></pre>
+
+    <p class="lead">Only the <span class="kbd">Detected non-baseline ...</span> lines go out over the mesh. Everything else stays on USB.</p>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     FIELD NOTES
+     ============================================================= -->
+<section class="panel">
+  <header><span>Field Notes</span><span class="right">read before deploying</span></header>
+  <div class="body">
+
+    <div class="step">
+      <div class="n">i</div>
+      <h3>The baseline is relearned every boot</h3>
+      <p>The whitelist lives in RAM only. Every power cycle or reset starts a fresh 5-minute baseline. Place the node first, power it up, then leave the area so your own phone, watch and earbuds don't end up whitelisted (or, if you want them ignored, stay close during the baseline).</p>
+    </div>
+
+    <div class="step">
+      <div class="n">i</div>
+      <h3>Random MACs look like new devices</h3>
+      <p>Modern phones rotate their Bluetooth and WiFi probe MAC addresses every few minutes. A phone that was present during the baseline can still trigger alerts later when it rotates. Treat a burst of BLE or probe alerts as &ldquo;someone is here&rdquo;, not as an exact device count.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">i</div>
+      <h3>One alert per device</h3>
+      <p>Each MAC alerts once per boot. Deepwoods tracks up to 200 BLE, 200 access point and 500 probe-request MACs; in a very busy RF environment it stops tracking new ones of a type once that list is full. It's made for quiet places.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- =============================================================
+     TROUBLESHOOTING
+     ============================================================= -->
+<section class="panel">
+  <header><span>Troubleshooting</span><span class="right">common snags</span></header>
+  <div class="body trouble">
+
+    <div class="step">
+      <div class="n">?</div>
+      <h3>Nothing shows up in the port picker</h3>
+      <p>Try a different USB-C cable (charge-only won't work), or hold <span class="kbd">BOOT</span> while plugging in to force download mode. The XIAO S3 uses native USB, so no extra drivers are needed on macOS, Linux or Windows 10+.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">?</div>
+      <h3>Alerts print on USB but never reach the mesh</h3>
+      <p>The Heltec is almost certainly in <b>TEXTMSG</b> or <b>DEFAULT</b> serial mode. Deepwoods needs <span class="kbd">PROTO</span>. Also confirm RX <span class="kbd">19</span> / TX <span class="kbd">20</span> at <span class="kbd">115200</span>, and that the Heltec has rebooted after the change.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">?</div>
+      <h3>My receiving radio doesn't see alerts</h3>
+      <p>Alerts go out on the Heltec's primary channel (index 0). Your receiver needs that same channel with the same name and key.</p>
+    </div>
+
+    <div class="step">
+      <div class="n">?</div>
+      <h3>Too many alerts</h3>
+      <p>The node probably booted while you were nearby and then you walked away and came back with rotated MACs, or it was powered on somewhere busy. Power-cycle it where it will live, and let the 5-minute baseline finish undisturbed.</p>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  Hardware &middot; <a href="https://colonelpanic.tech">colonelpanic.tech</a><br>
+  Firmware source &middot; <a href="https://github.com/colonelpanichacks/deepwoods_device_detection">github.com/colonelpanichacks/deepwoods_device_detection</a>
+</footer>
+
+</main>
+
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body>
+</html>
